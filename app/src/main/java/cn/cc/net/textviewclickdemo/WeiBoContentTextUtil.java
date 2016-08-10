@@ -107,6 +107,7 @@ public class WeiBoContentTextUtil {
                                 spannableStringBuilder.setSpan(span,section.start,section.end,Spannable.SPAN_INCLUSIVE_INCLUSIVE);
                                 downSection = section;
                                 textView.setText(spannableStringBuilder);
+								textView.getParent().requestDisallowInterceptTouchEvent(true);//不允许父view拦截
                                 downX = (int) event.getX();
                                 downY = (int) event.getY();
                                 break;
@@ -119,6 +120,7 @@ public class WeiBoContentTextUtil {
                         if (Math.abs(currentX-downX) < slop && Math.abs(currentY-downY) < slop) {
                             break;
                         }
+						textView.getParent().requestDisallowInterceptTouchEvent(false);//允许父view拦截
                     case MotionEvent.ACTION_UP:
                         spannableStringBuilder.removeSpan(span);
                         textView.setText(spannableStringBuilder);
