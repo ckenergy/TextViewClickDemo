@@ -69,6 +69,7 @@ public class WeiBoContentTextUtil {
                 Section section = new Section(start, end);
                 sections.add(section);
                 //再构造一个改变字体颜色的Span
+
                 ForegroundColorSpan foregroundspan = new ForegroundColorSpan(Color.BLUE);
                 spannableStringBuilder.setSpan(foregroundspan, start, end, Spannable.SPAN_INCLUSIVE_INCLUSIVE);
             }
@@ -85,10 +86,9 @@ public class WeiBoContentTextUtil {
 
         final int slop = ViewConfiguration.get(context).getScaledTouchSlop();
         final BackgroundColorSpan span = new BackgroundColorSpan(Color.YELLOW);
-
         textView.setOnTouchListener(new View.OnTouchListener() {
 
-            int downX= -1,downY=-1;
+            int downX= -slop,downY=-slop;
             Section downSection = null;
 
             @Override
@@ -101,6 +101,13 @@ public class WeiBoContentTextUtil {
                     case MotionEvent.ACTION_DOWN:
                         line = layout.getLineForVertical(textView.getScrollY()+ (int)event.getY());
                         index = layout.getOffsetForHorizontal(line, (int)event.getX());
+                        int lastRight = (int) layout.getLineRight(line);
+//                        int lastLeft = (int) textView.getX();
+                        if (lastRight < event.getX()) {
+                            return false;
+                        }
+                        Log.d(TAG,"lastRight:"+lastRight+",eventX:"+event.getX());
+
                         Log.d(TAG," index:"+ index+",sections:"+sections.size());
                         for (Section section : sections) {
                             if ( index>=section.start &&  index <= section.end) {
@@ -128,11 +135,15 @@ public class WeiBoContentTextUtil {
                         int upY = (int) event.getY();
                         if (Math.abs(upX-downX) < slop && Math.abs(upY-downY) < slop) {
                             //TODO startActivity or whatever
+                            Log.d(TAG,"start:"+downSection.start+",end:"+downSection.end);
                             if (downSection != null) {
                                 String name = source.substring(downSection.start,downSection.end);
                                 Toast.makeText(context,name,Toast.LENGTH_SHORT).show();
                             }
                         }
+                        downSection = null;
+                        downX = -slop;
+                        downY = -slop;
                         break;
                 }
                 return true;
