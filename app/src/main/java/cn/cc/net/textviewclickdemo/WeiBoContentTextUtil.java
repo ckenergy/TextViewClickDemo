@@ -2,17 +2,16 @@ package cn.cc.net.textviewclickdemo;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.support.v4.view.MotionEventCompat;
 import android.text.Layout;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
-import android.text.method.LinkMovementMethod;
 import android.text.style.BackgroundColorSpan;
 import android.text.style.ForegroundColorSpan;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,17 +19,30 @@ import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Created by wenmingvs on 16/4/16.
- */
+
+//TODO callback
 public class WeiBoContentTextUtil {
 
-   static class Section {
-       int start;
-       int end;
-        Section(int start, int end) {
+    private static class Section {
+        static final int AT = 1;
+        static final int TOPIC = 2;// ##话题
+
+        private int start;
+        private int end;
+        private int type;
+        private String name;
+
+
+        Section(int start, int end, int type, String name) {
             this.start = start;
             this.end = end;
+            this.type = type;
+            this.name = name;
+        }
+
+        @Override
+        public String toString() {
+            return "start:"+start+",end:"+end;
         }
     }
     private static final String TAG = "WeiBoContentTextUtil";
@@ -48,7 +60,7 @@ public class WeiBoContentTextUtil {
         Pattern pattern = Pattern.compile(ALL);
         Matcher matcher = pattern.matcher(spannableStringBuilder);
 
-        if (matcher.find()) {
+        /*if (matcher.find()) {
             if (!(textView instanceof EditText)) {
                 textView.setMovementMethod(LinkMovementMethod.getInstance());
                 textView.setFocusable(false);
@@ -56,7 +68,7 @@ public class WeiBoContentTextUtil {
                 textView.setLongClickable(false);
             }
             matcher.reset();
-        }
+        }*/
 
         while (matcher.find()) {
             final String at = matcher.group(1);
@@ -66,89 +78,114 @@ public class WeiBoContentTextUtil {
             if (at != null) {
                 int start = matcher.start(1);
                 int end = start + at.length();
-                Section section = new Section(start, end);
+                Section section = new Section(start,end,Section.AT,at);
                 sections.add(section);
-                //再构造一个改变字体颜色的Span
-
-                ForegroundColorSpan foregroundspan = new ForegroundColorSpan(Color.BLUE);
-                spannableStringBuilder.setSpan(foregroundspan, start, end, Spannable.SPAN_INCLUSIVE_INCLUSIVE);
+                ForegroundColorSpan foregroundColorSpan = new ForegroundColorSpan(Color.BLUE);
+                spannableStringBuilder.setSpan(foregroundColorSpan, start, end, Spannable.SPAN_INCLUSIVE_INCLUSIVE);
             }
             //处理##话题
             if (topic != null) {
                 int start = matcher.start(2);
                 int end = start + topic.length();
-                Section section = new Section(start, end);
+                Section section = new Section(start,end,Section.TOPIC,topic);
                 sections.add(section);
-                ForegroundColorSpan foregroundspan = new ForegroundColorSpan(Color.BLUE);
-                spannableStringBuilder.setSpan(foregroundspan, start, end, Spannable.SPAN_INCLUSIVE_INCLUSIVE);
+                ForegroundColorSpan foregroundColorSpan = new ForegroundColorSpan(Color.BLUE);
+                spannableStringBuilder.setSpan(foregroundColorSpan, start, end, Spannable.SPAN_INCLUSIVE_INCLUSIVE);
             }
-        }
 
-        final int slop = ViewConfiguration.get(context).getScaledTouchSlop();
+        }
         final BackgroundColorSpan span = new BackgroundColorSpan(Color.YELLOW);
+        final int slop = ViewConfiguration.get(context).getScaledTouchSlop();
         textView.setOnTouchListener(new View.OnTouchListener() {
 
-            int downX= -slop,downY=-slop;
+            int downX,downY;
             Section downSection = null;
-
+            int id;
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                int action = event.getAction();
+                int action = MotionEventCompat.getActionMasked(event);
                 Layout layout = textView.getLayout();
+                if (layout == null) {
+                    Log.d(TAG,"layout is null");
+                    return false;
+                }
                 int line = 0;
                 int index = 0;
+
                 switch(action) {
-                    case MotionEvent.ACTION_DOWN:
-                        line = layout.getLineForVertical(textView.getScrollY()+ (int)event.getY());
+                    case MotionEvent.ACTION_DOWN://TODO 最后一行点击问题 网址链接
+                        int actionIndex = event.getActionIndex();
+                        id = event.getPointerId(actionIndex);
+                        downX = (int) event.getX(actionIndex);
+                        downY = (int) event.getY(actionIndex);
+                        Log.d(TAG, "ACTION_down,x:"+event.getX()+",y:"+event.getY());
+                        line = layout.getLineForVertical(textView.getScrollY() + (int)event.getY());
                         index = layout.getOffsetForHorizontal(line, (int)event.getX());
                         int lastRight = (int) layout.getLineRight(line);
-//                        int lastLeft = (int) textView.getX();
-                        if (lastRight < event.getX()) {
+                        Log.d(TAG,"lastRight:"+lastRight);
+                        if (lastRight < event.getX()) {  //文字最后为话题时，如果点击在最后一行话题之后，也会造成话题被选中效果
                             return false;
                         }
-                        Log.d(TAG,"lastRight:"+lastRight+",eventX:"+event.getX());
-
                         Log.d(TAG," index:"+ index+",sections:"+sections.size());
                         for (Section section : sections) {
-                            if ( index>=section.start &&  index <= section.end) {
-                                spannableStringBuilder.setSpan(span,section.start,section.end,Spannable.SPAN_INCLUSIVE_INCLUSIVE);
+                            if (index >= section.start &&  index <= section.end) {
+                                spannableStringBuilder.setSpan(span, section.start, section.end, Spannable.SPAN_INCLUSIVE_INCLUSIVE);
                                 downSection = section;
                                 textView.setText(spannableStringBuilder);
-								textView.getParent().requestDisallowInterceptTouchEvent(true);//不允许父view拦截
-                                downX = (int) event.getX();
-                                downY = (int) event.getY();
-                                break;
+                                textView.getParent().requestDisallowInterceptTouchEvent(true);//不允许父view拦截
+                                Log.d(TAG,"downSection"+downSection.toString());
+                                return true;
                             }
                         }
-                        break;
+
+                        return false;
                     case MotionEvent.ACTION_MOVE:
-                        int currentX = (int) event.getX();
-                        int currentY = (int) event.getY();
+                        int indexMove = event.findPointerIndex(id);
+                        int currentX = (int) event.getX(indexMove);
+                        int currentY = (int) event.getY(indexMove);
+                        Log.d(TAG, "ACTION_MOVE,x:"+currentX+",y:"+currentY);
                         if (Math.abs(currentX-downX) < slop && Math.abs(currentY-downY) < slop) {
+                            if (downSection == null) {
+                                Log.d(TAG, "downSection is null");
+                                textView.getParent().requestDisallowInterceptTouchEvent(false);//允许父view拦截
+                                return false;
+                            }
+
                             break;
                         }
-						textView.getParent().requestDisallowInterceptTouchEvent(false);//允许父view拦截
+                        downSection = null;
+                        textView.getParent().requestDisallowInterceptTouchEvent(false);//允许父view拦截
+
+                    case MotionEvent.ACTION_CANCEL:
+                        Log.d(TAG, "ACTION_CANCEL");
                     case MotionEvent.ACTION_UP:
+                        int indexUp = event.findPointerIndex(id);
                         spannableStringBuilder.removeSpan(span);
                         textView.setText(spannableStringBuilder);
-                        int upX = (int) event.getX();
-                        int upY = (int) event.getY();
+                        int upX = (int) event.getX(indexUp);
+                        int upY = (int) event.getY(indexUp);
+                        Log.d(TAG, "ACTION_UP,x:"+upX+",y:"+upY);
                         if (Math.abs(upX-downX) < slop && Math.abs(upY-downY) < slop) {
                             //TODO startActivity or whatever
-                            Log.d(TAG,"start:"+downSection.start+",end:"+downSection.end);
                             if (downSection != null) {
-                                String name = source.substring(downSection.start,downSection.end);
+                                String name = downSection.name;
                                 Toast.makeText(context,name,Toast.LENGTH_SHORT).show();
+                                downSection = null;
+                            }else {
+                                return false;
                             }
+                        }else {
+                            Log.d(TAG, "false");
+                            downSection = null;
+                            return false;
                         }
-                        downSection = null;
-                        downX = -slop;
-                        downY = -slop;
                         break;
                 }
+                Log.d(TAG,"true");
                 return true;
             }
         });
         return spannableStringBuilder;
     }
+
 }
